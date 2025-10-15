@@ -390,20 +390,32 @@
                             const morningStatus = determineStatus(checkIn);
                             const afternoonStatus = determineStatus(checkOut);
 
-                            let finalStatus = 'Absent'; // Default
-                            if (morningStatus === 'Absent' || afternoonStatus === 'Absent') {
-                                finalStatus = 'Absent';
-                            } else if (morningStatus === 'Leave' || afternoonStatus === 'Leave') {
-                                finalStatus = 'Leave';
-                            } else if (morningStatus === 'Present' || afternoonStatus === 'Present') {
-                                finalStatus = 'Present';
-                            } else if (morningStatus === 'OnDuty' || afternoonStatus === 'OnDuty') {
-                                finalStatus = 'OnDuty';
-                            } else if (morningStatus === 'NoData' && afternoonStatus === 'NoData'){
-                                finalStatus = 'Absent';
+                            const dailyCounts = { Present: 0, Absent: 0, Leave: 0, OnDuty: 0 };
+                            if (morningStatus !== 'NoData') dailyCounts[morningStatus] += 0.5;
+                            if (afternoonStatus !== 'NoData') dailyCounts[afternoonStatus] += 0.5;
+
+                            // If both are NoData, it's a full day absence
+                            if (morningStatus === 'NoData' && afternoonStatus === 'NoData') {
+                                dailyCounts.Absent = 1;
+                            } else {
+                                // If one is NoData, count it as a half-day absence
+                                if (morningStatus === 'NoData') dailyCounts.Absent += 0.5;
+                                if (afternoonStatus === 'NoData') dailyCounts.Absent += 0.5;
                             }
+
+
+                            let dominantStatus = 'Present';
+                            if (dailyCounts.Absent > 0) dominantStatus = 'Absent';
+                            else if (dailyCounts.Leave > 0) dominantStatus = 'Leave';
+                            else if (dailyCounts.OnDuty > 0) dominantStatus = 'OnDuty';
                             
-                            attendanceData[formattedDate] = finalStatus;
+                            attendanceData[formattedDate] = {
+                                dominant: dominantStatus,
+                                present: dailyCounts.Present,
+                                absent: dailyCounts.Absent,
+                                leave: dailyCounts.Leave,
+                                onduty: dailyCounts.OnDuty
+                            };
                         }
                     });
                 } catch (error) {
@@ -432,19 +444,19 @@
                     let year = today.getFullYear();
                     if (month < 0) { month += 12; year -= 1; }
 
-                    const hasAbsenceOrLeaveThisMonth = Object.keys(attendanceData).some(dateStr => {
+                    const monthlyTotals = Object.keys(attendanceData).reduce((acc, dateStr) => {
                         const d = new Date(dateStr);
-                        const status = attendanceData[dateStr];
-                        return d.getMonth() === month && d.getFullYear() === year && (status === 'Absent' || status === 'Leave');
-                    });
-                    
+                        if (d.getMonth() === month && d.getFullYear() === year) {
+                            acc.absent += attendanceData[dateStr].absent;
+                            acc.leave += attendanceData[dateStr].leave;
+                        }
+                        return acc;
+                    }, { absent: 0, leave: 0 });
+
+                    const hasAbsenceOrLeaveThisMonth = (monthlyTotals.absent + monthlyTotals.leave) > 0;
                     const final_allowance = hasAbsenceOrLeaveThisMonth ? 0 : base_allowance;
                     
-                    const absencesAndLeavesThisMonth = Object.keys(attendanceData).filter(dateStr => {
-                        const d = new Date(dateStr);
-                        const status = attendanceData[dateStr];
-                        return d.getMonth() === month && d.getFullYear() === year && (status === 'Absent' || status === 'Leave');
-                    }).length;
+                    const absencesAndLeavesThisMonth = monthlyTotals.absent + monthlyTotals.leave;
                     
                     let final_deductions = 0;
                     const isEligibleForDeduction = ['ឆ្នាំទី២', 'ឆ្នាំទី៣', 'ឆ្នាំទី៤'].includes(academicYear);
@@ -491,14 +503,17 @@
 
             function updateDashboardSummary() {
                  const summary = Object.values(attendanceData).reduce((acc, current) => {
-                    const key = current.toLowerCase();
-                    acc[key] = (acc[key] || 0) + 1;
+                    acc.present += current.present;
+                    acc.absent += current.absent;
+                    acc.leave += current.leave;
+                    acc.onduty += current.onduty;
                     return acc;
-                 }, {});
-                 document.getElementById('days-present').textContent = summary.present || 0;
-                 document.getElementById('days-absent').textContent = summary.absent || 0;
-                 document.getElementById('days-onduty').textContent = summary.onduty || 0;
-                 document.getElementById('days-leave').textContent = summary.leave || 0;
+                 }, { present: 0, absent: 0, leave: 0, onduty: 0 });
+
+                 document.getElementById('days-present').textContent = summary.present;
+                 document.getElementById('days-absent').textContent = summary.absent;
+                 document.getElementById('days-onduty').textContent = summary.onduty;
+                 document.getElementById('days-leave').textContent = summary.leave;
             }
 
             function renderCalendar(month, year) {
@@ -510,11 +525,11 @@
                 for (let i=0; i<f; i++) g.appendChild(document.createElement('div'));
                 for (let d=1; d<=new Date(year, month + 1, 0).getDate(); d++) {
                     const dt = new Date(year, month, d);
-                    const s = attendanceData[dt.toISOString().split('T')[0]];
+                    const dailyInfo = attendanceData[dt.toISOString().split('T')[0]];
                     let c = 'bg-gray-100 text-gray-400';
                     const colorMap = {Present:'bg-green-500', Absent:'bg-red-500', Leave:'bg-blue-500', OnDuty: 'bg-purple-500'};
-                    if (s && colorMap[s]) {
-                        c = colorMap[s] + ' text-white';
+                    if (dailyInfo && colorMap[dailyInfo.dominant]) {
+                        c = colorMap[dailyInfo.dominant] + ' text-white';
                     }
                     g.innerHTML += `<div class="w-10 h-10 flex items-center justify-center rounded-full mx-auto ${c}">${d}</div>`;
                 }
