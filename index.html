@@ -425,7 +425,6 @@
 
             function generatePayslipData() {
                 payslipData.length = 0;
-                const today = new Date();
                 
                 let base_salary = 0;
                 let base_allowance = 0;
@@ -439,10 +438,15 @@
                     default: base_salary = 250000; base_allowance = 50000;
                 }
 
-                for (let i = 0; i < 3; i++) {
-                    let month = today.getMonth() - i;
-                    let year = today.getFullYear();
-                    if (month < 0) { month += 12; year -= 1; }
+                const availableMonths = new Set();
+                Object.keys(attendanceData).forEach(dateStr => {
+                    const d = new Date(dateStr);
+                    availableMonths.add(`${d.getFullYear()}-${d.getMonth()}`);
+                });
+
+                Array.from(availableMonths).sort((a, b) => new Date(b.split('-')[0], b.split('-')[1]) - new Date(a.split('-')[0], a.split('-')[1]))
+                .forEach(monthString => {
+                    const [year, month] = monthString.split('-').map(Number);
 
                     const monthlyTotals = Object.keys(attendanceData).reduce((acc, dateStr) => {
                         const d = new Date(dateStr);
@@ -466,7 +470,7 @@
                     }
 
                     payslipData.push({ month, year, basic_salary: base_salary, allowance: final_allowance, deductions: final_deductions });
-                }
+                });
             }
 
             // --- APP LOGIC (Main entry point after login) ---
@@ -547,8 +551,14 @@
             function populatePayslipSelect() {
                 const s = document.getElementById('payslip-month-select');
                 s.innerHTML = '';
-                payslipData.forEach(p => s.innerHTML += `<option value="${p.year}-${p.month}">ខែ ${khmerMonths[p.month]} ${p.year}</option>`);
-                if (payslipData.length > 0) renderPayslip(s.value);
+                if (payslipData.length === 0) {
+                    s.innerHTML = `<option>គ្មានទិន្នន័យ</option>`;
+                    document.getElementById('payslip-details').innerHTML = `<p class="text-center text-gray-500">គ្មានទិន្នន័យវិក័យបត្រសម្រាប់បង្ហាញទេ។</p>`;
+
+                } else {
+                    payslipData.forEach(p => s.innerHTML += `<option value="${p.year}-${p.month}">ខែ ${khmerMonths[p.month]} ${p.year}</option>`);
+                    renderPayslip(s.value);
+                }
             }
 
             function renderPayslip(value) {
