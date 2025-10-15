@@ -103,9 +103,14 @@
     <script>
         document.addEventListener('DOMContentLoaded', async function() {
             // --- Global State & Config ---
-            const SHEET_ID = '1eRyPoifzyvB4oBmruNyXcoKMKPRqjk6xDD6-bPNW6pc';
-            const SHEET_NAME = 'DIList';
-            const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET_NAME}`;
+            const EMPLOYEE_SHEET_ID = '1eRyPoifzyvB4oBmruNyXcoKMKPRqjk6xDD6-bPNW6pc';
+            const EMPLOYEE_SHEET_NAME = 'DIList';
+            const EMPLOYEE_SHEET_URL = `https://docs.google.com/spreadsheets/d/${EMPLOYEE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${EMPLOYEE_SHEET_NAME}`;
+            
+            const ATTENDANCE_SHEET_ID = '14eA00GXamqLkhuLAzVYPOBKads7XUZ5mfVRyqSGQwfk';
+            const ATTENDANCE_SHEET_NAME = 'Data';
+            const ATTENDANCE_SHEET_URL = `https://docs.google.com/spreadsheets/d/${ATTENDANCE_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${ATTENDANCE_SHEET_NAME}`;
+
             const khmerMonths = ["មករា", "កុម្ភៈ", "មីនា", "មេសា", "ឧសភា", "មិថុនា", "កក្កដា", "សីហា", "កញ្ញា", "តុលា", "វិច្ឆិកា", "ធ្នូ"];
 
             let allEmployees = [], loggedInEmployeeData = null, referenceDescriptor = null;
@@ -169,7 +174,7 @@
 
             async function initializeLogin() {
                 try {
-                    const response = await fetch(SHEET_URL);
+                    const response = await fetch(EMPLOYEE_SHEET_URL);
                     const csvText = await response.text();
                     allEmployees = parseEmployeeCSV(csvText);
                     populateEmployeeDatalist(allEmployees);
@@ -298,9 +303,112 @@
                 cameraModal.classList.add('hidden');
             }
             
-            // --- APP LOGIC ---
-            function initializeApp() {
-                generateMockDataForUser();
+            // --- NEW DATA HANDLING LOGIC ---
+            function parseDateFromSheet(dateStr) { // e.g., "15-Oct-2025"
+                if (!dateStr || dateStr.split('-').length !== 3) return null;
+                const monthMap = {
+                    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+                };
+                const parts = dateStr.split('-');
+                const day = parseInt(parts[0], 10);
+                const monthStr = parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+                const month = monthMap[monthStr];
+                const year = parseInt(parts[2], 10);
+                if (isNaN(day) || month === undefined || isNaN(year)) return null;
+                return new Date(year, month, day);
+            }
+
+            async function fetchAndProcessAttendanceData() {
+                Object.keys(attendanceData).forEach(key => delete attendanceData[key]);
+                if (!loggedInEmployeeData || !loggedInEmployeeData.id) return;
+                
+                try {
+                    const response = await fetch(ATTENDANCE_SHEET_URL);
+                    const csvText = await response.text();
+                    const rows = csvText.split('\n').slice(1);
+
+                    rows.forEach(row => {
+                        const columns = row.split('","').map(c => c.replace(/"/g, ''));
+                        if (columns.length < 11) return;
+
+                        const employeeIdInSheet = columns[6].trim();
+                        
+                        if (employeeIdInSheet === loggedInEmployeeData.id) {
+                            const dateStr = columns[7].trim();      // H: កាលបរិច្ឆេទ
+                            const checkIn = columns[9].trim();      // J: វត្តមានម៉ោងចូល
+                            
+                            const date = parseDateFromSheet(dateStr);
+                            if (!date) return;
+
+                            const formattedDate = date.toISOString().split('T')[0];
+                            
+                            let status = 'Absent'; // Default to absent
+                            const checkInUpper = checkIn.toUpperCase();
+                            
+                            if (checkInUpper.includes(':')) {
+                                status = 'Present';
+                            } else if (checkInUpper === 'P' || checkInUpper.includes('ច្បាប់')) {
+                                status = 'Leave';
+                            }
+                            
+                            attendanceData[formattedDate] = status;
+                        }
+                    });
+                } catch (error) {
+                    console.error("Failed to fetch or process attendance data:", error);
+                }
+            }
+
+            function generatePayslipData() {
+                payslipData.length = 0;
+                const today = new Date();
+                
+                let base_salary = 0;
+                let base_allowance = 0;
+                const academicYear = loggedInEmployeeData.academicYear;
+
+                switch (academicYear) {
+                    case 'ឆ្នាំទី១': base_salary = 300000; base_allowance = 100000; break;
+                    case 'ឆ្នាំទី២': base_salary = 400000; base_allowance = 100000; break;
+                    case 'ឆ្នាំទី៣': base_salary = 600000; base_allowance = 200000; break;
+                    case 'ឆ្នាំទី៤': base_salary = 1000000; base_allowance = 200000; break;
+                    default: base_salary = 250000; base_allowance = 50000;
+                }
+
+                for (let i = 0; i < 3; i++) {
+                    let month = today.getMonth() - i;
+                    let year = today.getFullYear();
+                    if (month < 0) { month += 12; year -= 1; }
+
+                    const hasAbsenceThisMonth = Object.keys(attendanceData).some(dateStr => {
+                        const d = new Date(dateStr);
+                        return d.getMonth() === month && d.getFullYear() === year && attendanceData[dateStr] === 'Absent';
+                    });
+                    
+                    const final_allowance = hasAbsenceThisMonth ? 0 : base_allowance;
+                    
+                    const absencesAndLeavesThisMonth = Object.keys(attendanceData).filter(dateStr => {
+                        const d = new Date(dateStr);
+                        const status = attendanceData[dateStr];
+                        return d.getMonth() === month && d.getFullYear() === year && (status === 'Absent' || status === 'Leave');
+                    }).length;
+                    
+                    let final_deductions = 0;
+                    const isEligibleForDeduction = ['ឆ្នាំទី២', 'ឆ្នាំទី៣', 'ឆ្នាំទី៤'].includes(academicYear);
+
+                    if (isEligibleForDeduction && absencesAndLeavesThisMonth >= 3) {
+                        final_deductions += 100000;
+                    }
+
+                    payslipData.push({ month, year, basic_salary: base_salary, allowance: final_allowance, deductions: final_deductions });
+                }
+            }
+
+            // --- APP LOGIC (Main entry point after login) ---
+            async function initializeApp() {
+                await fetchAndProcessAttendanceData();
+                generatePayslipData();
                 loadEmployeeInfo();
                 setupNavListeners();
                 updateDashboardSummary();
@@ -310,83 +418,6 @@
                 setupPayslipSelectListener();
                 document.getElementById('logout-button').addEventListener('click', handleLogout);
                 navigateTo('dashboard-page');
-            }
-            
-            function generateMockDataForUser() {
-                Object.keys(attendanceData).forEach(key => delete attendanceData[key]);
-                payslipData.length = 0;
-                
-                const today = new Date();
-                for (let m = today.getMonth() - 2; m <= today.getMonth(); m++) {
-                    let date = new Date(today.getFullYear(), m, 1);
-                    while (date.getMonth() === m) {
-                        if (date.getDay() !== 0 && date.getDay() !== 6) {
-                            const s = Math.random();
-                            // Adjusted probabilities to make testing absences easier
-                            attendanceData[date.toISOString().split('T')[0]] = s > 0.85 ? 'Absent' : s > 0.70 ? 'Leave' : s > 0.6 ? 'Late' : 'Present';
-                        }
-                        date.setDate(date.getDate() + 1);
-                    }
-                }
-
-                let base_salary = 0;
-                let base_allowance = 0;
-                const academicYear = loggedInEmployeeData.academicYear;
-
-                switch (academicYear) {
-                    case 'ឆ្នាំទី១':
-                        base_salary = 300000;
-                        base_allowance = 100000;
-                        break;
-                    case 'ឆ្នាំទី២':
-                        base_salary = 400000;
-                        base_allowance = 100000;
-                        break;
-                    case 'ឆ្នាំទី៣':
-                        base_salary = 600000;
-                        base_allowance = 200000;
-                        break;
-                    case 'ឆ្នាំទី៤':
-                        base_salary = 1000000;
-                        base_allowance = 200000;
-                        break;
-                    default:
-                        base_salary = 250000;
-                        base_allowance = 50000;
-                }
-
-                for (let i = 0; i < 3; i++) {
-                    let month = today.getMonth() - i;
-                    let year = today.getFullYear();
-                    if (month < 0) {
-                        month += 12;
-                        year -= 1;
-                    }
-
-                    // Rule 1: No allowance if absent (without leave)
-                    const hasAbsenceThisMonth = Object.keys(attendanceData).some(dateStr => {
-                        const d = new Date(dateStr);
-                        return d.getMonth() === month && d.getFullYear() === year && attendanceData[dateStr] === 'Absent';
-                    });
-                    
-                    const final_allowance = hasAbsenceThisMonth ? 0 : base_allowance;
-                    
-                    // Rule 2: Deduction for 3+ total absences (with or without leave)
-                    const absencesAndLeavesThisMonth = Object.keys(attendanceData).filter(dateStr => {
-                        const d = new Date(dateStr);
-                        const status = attendanceData[dateStr];
-                        return d.getMonth() === month && d.getFullYear() === year && (status === 'Absent' || status === 'Leave');
-                    }).length;
-                    
-                    let final_deductions = 50000; // Base deduction
-                    const isEligibleForDeduction = ['ឆ្នាំទី២', 'ឆ្នាំទី៣', 'ឆ្នាំទី៤'].includes(academicYear);
-
-                    if (isEligibleForDeduction && absencesAndLeavesThisMonth >= 3) {
-                        final_deductions += 100000;
-                    }
-
-                    payslipData.push({ month, year, basic_salary: base_salary, allowance: final_allowance, deductions: final_deductions });
-                }
             }
 
             function loadEmployeeInfo() {
@@ -458,7 +489,7 @@
                 if (!d) { c.innerHTML = `<p>គ្មានទិន្នន័យ</p>`; return; }
                 const t = d.basic_salary + d.allowance;
                 const n = t - d.deductions;
-                c.innerHTML = `<div class="mb-4 text-center"><p class="font-bold text-lg">វិក័យបត្រសម្រាប់ខែ ${khmerMonths[m]} ${y}</p><p class="text-sm text-gray-500">ID: ${loggedInEmployeeData.id}</p></div><div class="border-t border-b py-2 space-y-2"><h4 class="font-semibold text-green-700">ចំណូល</h4><div class="flex justify-between"><span>ប្រាក់ខែគោល:</span> <span>${toKhmerCurrency(d.basic_salary)}</span></div><div class="flex justify-between"><span>ប្រាក់លើកទឹកចិត្ត:</span> <span>${toKhmerCurrency(d.allowance)}</span></div><div class="flex justify-between font-bold border-t pt-1 mt-1"><span>សរុប:</span> <span>${toKhmerCurrency(t)}</span></div></div><div class="border-b py-2 space-y-2"><h4 class="font-semibold text-red-700">ការកាត់កង</h4><div class="flex justify-between"><span>ការកាត់កងសរុប:</span> <span>${toKhmerCurrency(d.deductions)}</span></div></div><div class="mt-4 text-center bg-blue-100 p-3 rounded-lg"><p class="text-sm text-blue-800">ប្រាក់ខែចុងក្រោយ</p><p class="text-2xl font-bold text-blue-900">${toKhmerCurrency(n)}</p></div>`;
+                c.innerHTML = `<div class="mb-4 text-center"><p class="font-bold text-lg">វិក័យបត្រសម្រាប់ខែ ${khmerMonths[m]} ${y}</p><p class="text-sm text-gray-500">ID: ${loggedInEmployeeData.id}</p></div><div class="border-t border-b py-2 space-y-2"><h4 class="font-semibold text-green-700">ចំណូល</h4><div class="flex justify-between"><span>ប្រាក់ខែគោល:</span> <span>${toKhmerCurrency(d.basic_salary)}</span></div><div class="flex justify-between"><span>ប្រាក់លើកទឹកចិត្ត:</span> <span>${toKhmerCurrency(d.allowance)}</span></div><div class="flex justify-between font-bold border-t pt-1 mt-1"><span>សរុប:</span> <span>${toKhmerCurrency(t)}</span></div></div><div class="border-b py-2 space-y-2"><h4 class="font-semibold text-red-700">ការកាត់កង</h4><div class="flex justify-between"><span>អវត្តមានម៉ោងការងារ:</span> <span>${toKhmerCurrency(d.deductions)}</span></div></div><div class="mt-4 text-center bg-blue-100 p-3 rounded-lg"><p class="text-sm text-blue-800">ប្រាក់ខែចុងក្រោយ</p><p class="text-2xl font-bold text-blue-900">${toKhmerCurrency(n)}</p></div>`;
             }
 
             function setupPayslipSelectListener() {
