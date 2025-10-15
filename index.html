@@ -147,8 +147,8 @@
             async function createReferenceDescriptor(imageUrl) {
                 if (!imageUrl || !imageUrl.startsWith('http')) return null;
                 try {
-                    const proxiedImageUrl = `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl)}`;
-                    const img = await faceapi.fetchImage(proxiedImageUrl);
+                    // Directly fetch the image from the original URL
+                    const img = await faceapi.fetchImage(imageUrl);
                     const detection = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
                     return detection ? detection.descriptor : null;
                 } catch (e) {
@@ -221,7 +221,7 @@
                 if (referenceDescriptor) {
                     await startCamera();
                 } else {
-                    loginError.textContent = 'មិនអាចដំណើរការរូបភាពយោងបានទេ។';
+                    loginError.textContent = 'រូបថតយោងមិនត្រឹមត្រូវ ឬមិនអាចចូលដំណើរការបានទេ។';
                 }
                 
                 loginButton.disabled = false;
