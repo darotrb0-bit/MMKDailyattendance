@@ -373,6 +373,11 @@
                         const employeeIdInSheet = columns[6].trim();
                         
                         if (employeeIdInSheet === loggedInEmployeeData.id) {
+                            const schedule = columns[8].trim();
+                            if (schedule === 'ពេលយប់') {
+                                return; // Skip night shift records
+                            }
+
                             const dateStr = columns[7].trim();      
                             const checkIn = columns[9].trim();     
                             const checkOut = columns[10].trim();     
