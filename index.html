@@ -43,7 +43,7 @@
             </div>
 
             <button id="login-button" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2" disabled>
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M12 2a2 2 0 0 0-2 2v2H8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2V4a2 2 0 0 0-2-2z"/><path d="M9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M12 2a2 2 0 0 0-2 2v2H8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-本書V4a2 2 0 0 0-2-2z"/><path d="M9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0z"/></svg>
                 <span>ចូលដោយស្កេនមុខ</span>
             </button>
             <p id="login-error" class="text-red-500 text-sm text-center mt-2"></p>
@@ -354,7 +354,8 @@
                 const month = monthMap[monthStr];
                 const year = parseInt(parts[2], 10);
                 if (isNaN(day) || month === undefined || isNaN(year)) return null;
-                return new Date(year, month, day);
+                // Use Date.UTC to avoid timezone-related date shifts.
+                return new Date(Date.UTC(year, month, day));
             }
 
             async function fetchAndProcessAttendanceData() {
@@ -441,7 +442,7 @@
                 const availableMonths = new Set();
                 Object.keys(attendanceData).forEach(dateStr => {
                     const d = new Date(dateStr);
-                    availableMonths.add(`${d.getFullYear()}-${d.getMonth()}`);
+                    availableMonths.add(`${d.getUTCFullYear()}-${d.getUTCMonth()}`);
                 });
 
                 Array.from(availableMonths).sort((a, b) => new Date(b.split('-')[0], b.split('-')[1]) - new Date(a.split('-')[0], a.split('-')[1]))
@@ -450,7 +451,7 @@
 
                     const monthlyTotals = Object.keys(attendanceData).reduce((acc, dateStr) => {
                         const d = new Date(dateStr);
-                        if (d.getMonth() === month && d.getFullYear() === year) {
+                        if (d.getUTCMonth() === month && d.getUTCFullYear() === year) {
                             acc.absent += attendanceData[dateStr].absent;
                             acc.leave += attendanceData[dateStr].leave;
                         }
@@ -528,7 +529,8 @@
                 let f = new Date(year, month, 1).getDay();
                 for (let i=0; i<f; i++) g.appendChild(document.createElement('div'));
                 for (let d=1; d<=new Date(year, month + 1, 0).getDate(); d++) {
-                    const dt = new Date(year, month, d);
+                    // Use Date.UTC to create a consistent key for lookup.
+                    const dt = new Date(Date.UTC(year, month, d));
                     const dailyInfo = attendanceData[dt.toISOString().split('T')[0]];
                     let c = 'bg-gray-100 text-gray-400';
                     const colorMap = {Present:'bg-green-500', Absent:'bg-red-500', Leave:'bg-blue-500', OnDuty: 'bg-purple-500'};
