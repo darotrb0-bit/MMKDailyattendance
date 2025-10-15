@@ -163,11 +163,31 @@
 
             // --- INITIALIZATION ---
             async function mainInit() {
+                const savedEmployeeId = localStorage.getItem('loggedInEmployeeId');
+
                 loginButton.disabled = true;
                 loginButton.querySelector('span').textContent = 'កំពុងដំណើរការ...';
+                
                 const modelsLoaded = await loadFaceApiModels();
-                if (!modelsLoaded) return;
-                await initializeLogin();
+                if (!modelsLoaded) {
+                    loginButton.querySelector('span').textContent = 'មានបញ្ហា';
+                    return;
+                }
+                await initializeLogin(); // Populates allEmployees
+
+                if (savedEmployeeId && allEmployees.length > 0) {
+                    const savedEmployee = allEmployees.find(emp => emp.id === savedEmployeeId);
+                    if (savedEmployee) {
+                        loggedInEmployeeData = savedEmployee;
+                        loginContainer.classList.add('hidden');
+                        appContainer.style.display = 'flex';
+                        await initializeApp();
+                        return; 
+                    } else {
+                        localStorage.removeItem('loggedInEmployeeId');
+                    }
+                }
+
                 loginButton.disabled = true;
                 loginButton.querySelector('span').textContent = 'ចូលដោយស្កេនមុខ';
             }
@@ -253,11 +273,12 @@
                         const distance = faceapi.euclideanDistance(referenceDescriptor, detection.descriptor);
                         if (distance < 0.55) { // Stricter threshold for better accuracy
                             cameraStatus.textContent = 'ការផ្ទៀងផ្ទាត់បានជោគជ័យ!';
-                            setTimeout(() => {
+                            localStorage.setItem('loggedInEmployeeId', loggedInEmployeeData.id);
+                            setTimeout(async () => {
                                 stopCamera();
                                 loginContainer.classList.add('hidden');
                                 appContainer.style.display = 'flex';
-                                initializeApp();
+                                await initializeApp();
                             }, 1500);
                         } else {
                             cameraStatus.textContent = 'ផ្ទៃមុខមិនត្រូវគ្នាទេ។ សូមព្យាយាមម្តងទៀត។';
@@ -277,6 +298,7 @@
             });
 
             function handleLogout() {
+                localStorage.removeItem('loggedInEmployeeId');
                 appContainer.style.display = 'none';
                 loginContainer.classList.remove('hidden');
                 employeeSelect.value = '';
@@ -460,8 +482,9 @@
                     const dt = new Date(year, month, d);
                     const s = attendanceData[dt.toISOString().split('T')[0]];
                     let c = 'bg-gray-100 text-gray-400';
-                    if (dt.getDay() === 0 || dt.getDay() === 6) c = 'bg-gray-300 text-white';
-                    else if (s) c = {Present:'bg-green-500',Absent:'bg-red-500',Late:'bg-yellow-400',Leave:'bg-blue-500'}[s] + ' text-white';
+                    if (s) {
+                        c = {Present:'bg-green-500',Absent:'bg-red-500',Late:'bg-yellow-400',Leave:'bg-blue-500'}[s] + ' text-white';
+                    }
                     g.innerHTML += `<div class="w-10 h-10 flex items-center justify-center rounded-full mx-auto ${c}">${d}</div>`;
                 }
             }
