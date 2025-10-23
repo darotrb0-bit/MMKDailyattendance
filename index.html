@@ -204,7 +204,7 @@
             }
             
             function parseEmployeeCSV(csv) {
-                return csv.split('\n').slice(8).map(row => {
+                return csv.split('\n').slice(1).map(row => { // <--- កែពី .slice(8) ទៅ .slice(1)
                     const columns = row.split('","').map(c => c.replace(/"/g, ''));
                     if (columns.length > 26) {
                         return {
@@ -588,4 +588,5 @@
     </script>
 </body>
 </html>
+
 
