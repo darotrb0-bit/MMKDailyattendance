@@ -43,7 +43,7 @@
             </div>
 
             <button id="login-button" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2" disabled>
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M12 2a2 2 0 0 0-2 2v2H8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-本書V4a2 2 0 0 0-2-2z"/><path d="M9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M12 2a2 2 0 0 0-2 2v2H8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2V4a2 2 0 0 0-2-2z"/><path d="M9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0z"/></svg>
                 <span>ចូលដោយស្កេនមុខ</span>
             </button>
             <p id="login-error" class="text-red-500 text-sm text-center mt-2"></p>
@@ -480,7 +480,7 @@
                 generatePayslipData();
                 loadEmployeeInfo();
                 setupNavListeners();
-                updateDashboardSummary();
+                updateDashboardSummary(currentMonth, currentYear); // Pass current month/year
                 renderCalendar(currentMonth, currentYear);
                 setupCalendarControls();
                 populatePayslipSelect();
@@ -506,12 +506,17 @@
                 document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => navigateTo(item.dataset.page)));
             }
 
-            function updateDashboardSummary() {
-                 const summary = Object.values(attendanceData).reduce((acc, current) => {
-                    acc.present += current.present;
-                    acc.absent += current.absent;
-                    acc.leave += current.leave;
-                    acc.onduty += current.onduty;
+            function updateDashboardSummary(month, year) {
+                 const summary = Object.keys(attendanceData).reduce((acc, dateStr) => {
+                    const d = new Date(dateStr);
+                    // Filter by the specified month and year
+                    if (d.getUTCMonth() === month && d.getUTCFullYear() === year) {
+                        const current = attendanceData[dateStr];
+                        acc.present += current.present;
+                        acc.absent += current.absent;
+                        acc.leave += current.leave;
+                        acc.onduty += current.onduty;
+                    }
                     return acc;
                  }, { present: 0, absent: 0, leave: 0, onduty: 0 });
 
@@ -542,8 +547,18 @@
             }
 
             function setupCalendarControls() {
-                document.getElementById('prev-month').addEventListener('click', () => { currentMonth--; if (currentMonth < 0) { currentMonth = 11; currentYear--; } renderCalendar(currentMonth, currentYear); });
-                document.getElementById('next-month').addEventListener('click', () => { currentMonth++; if (currentMonth > 11) { currentMonth = 0; currentYear++; } renderCalendar(currentMonth, currentYear); });
+                document.getElementById('prev-month').addEventListener('click', () => { 
+                    currentMonth--; 
+                    if (currentMonth < 0) { currentMonth = 11; currentYear--; } 
+                    renderCalendar(currentMonth, currentYear); 
+                    updateDashboardSummary(currentMonth, currentYear); // Update dashboard on month change
+                });
+                document.getElementById('next-month').addEventListener('click', () => { 
+                    currentMonth++; 
+                    if (currentMonth > 11) { currentMonth = 0; currentYear++; } 
+                    renderCalendar(currentMonth, currentYear); 
+                    updateDashboardSummary(currentMonth, currentYear); // Update dashboard on month change
+                });
             }
 
             function toKhmerCurrency(num) {
@@ -581,6 +596,11 @@
                 document.querySelectorAll('#main-content > div').forEach(p => p.classList.add('hidden'));
                 document.getElementById(pageId).classList.remove('hidden');
                 document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('nav-active', i.dataset.page === pageId));
+                
+                // Update dashboard summary if navigating to dashboard
+                if (pageId === 'dashboard-page') {
+                    updateDashboardSummary(currentMonth, currentYear);
+                }
             }
 
             mainInit();
@@ -588,5 +608,4 @@
     </script>
 </body>
 </html>
-
 
